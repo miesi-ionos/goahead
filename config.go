@@ -20,6 +20,10 @@ type configSettings struct {
 	ClientCertCaFile           string        `yaml:"ssl_client_cert_ca_file"`
 	SaveStateDir               string        `yaml:"save_state_dir"`
 	LogBaseDir                 string        `yaml:"log_base_dir"`
+	// Log rotation settings
+	LogMaxSize         string `yaml:"log_max_size"`         // Maximum size before rotation (e.g., "100M", "1G")
+	LogRotationCount   int    `yaml:"log_rotation_count"`   // Number of rotated log files to keep
+	DeleteOldLogFiles  bool   `yaml:"delete_old_log_files"` // Whether to delete old log files beyond rotation count
 }
 
 // readConfigfile creates the configSettings struct from the config file
@@ -71,6 +75,15 @@ func readConfigfile(configFile string) configSettings {
 	if config.ListenPort == 0 {
 		config.ListenPort = 8443
 	}
+
+	// set default log rotation settings
+	if len(config.LogMaxSize) == 0 {
+		config.LogMaxSize = "100M"
+	}
+	if config.LogRotationCount == 0 {
+		config.LogRotationCount = 5
+	}
+	// DeleteOldLogFiles defaults to false (zero value)
 
 	return config
 }

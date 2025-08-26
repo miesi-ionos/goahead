@@ -4,9 +4,11 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strings"
 	"sync"
+	"syscall"
 
 	"github.com/sirupsen/logrus"
 )
@@ -60,10 +62,10 @@ func main() {
 
 	if len(config.IncludeDir) > 0 {
 		if isDir(config.IncludeDir) {
-			mainLogger.Debug("Glob'ing with " + config.IncludeDir + "**/*.yml")
+			mainLogger.Debugf("Glob'ing with %s**/*.yml", config.IncludeDir)
 			files := []string{}
 			err := filepath.Walk(config.IncludeDir, func(path string, f os.FileInfo, err error) error {
-				mainLogger.Info("Checking for file extension on file: " + path)
+				mainLogger.Infof("Checking for file extension on file: %s", path)
 				if filepath.Ext(path) == ".yml" {
 					files = append(files, path)
 				}
@@ -71,11 +73,11 @@ func main() {
 			})
 
 			if len(files) == 0 {
-				mainLogger.Fatal("Could not find any cluster settings matching " + config.IncludeDir + "**/*.yml")
+				mainLogger.Fatalf("Could not find any cluster settings matching %s**/*.yml", config.IncludeDir)
 			}
-			Debugf("found potential module versions:" + strings.Join(files, " "))
+			Debugf("found potential module versions: " + strings.Join(files, " "))
 			if err != nil {
-				mainLogger.Fatal("Failed to glob cluster settings include_dir with glob path " + config.IncludeDir + "**/*.yml Error: " + err.Error())
+				mainLogger.Fatalf("Failed to glob cluster settings include_dir with glob path %s**/*.yml Error: %v", config.IncludeDir, err)
 			}
 			for _, f := range files {
 				readClusterSetting(f)
@@ -92,6 +94,18 @@ func main() {
 
 	go serve()
 
-	select {}
+	// Set up signal handling for graceful shutdown
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+
+	mainLogger.Info("GoAhead server started. Press Ctrl+C to stop.")
+	
+	// Wait for shutdown signal
+	sig := <-sigChan
+	mainLogger.Infof("Received signal %v, shutting down gracefully...", sig)
+	
+	// Cleanup resources
+	logFileManager.CloseLogFiles()
+	mainLogger.Info("GoAhead server stopped")
 
 }

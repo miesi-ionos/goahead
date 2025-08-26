@@ -9,3 +9,8 @@ ssl_client_cert_ca_file: tests/ssl/test.pem
 ssl_certificate_file: tests/ssl/test.pem
 ssl_private_key: tests/ssl/test.key
 ssl_require_and_verify_client_cert: false
+
+# Log rotation settings for testing
+log_max_size: 1M                # Small size for testing rotation
+log_rotation_count: 3           # Keep fewer files for testing
+delete_old_log_files: true      # Enable cleanup for testing

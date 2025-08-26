@@ -9,3 +9,8 @@ ssl_client_cert_ca_file: ./ssl/goahead.pem
 ssl_certificate_file: ./ssl/goahead.pem
 ssl_private_key: ./ssl/goahead.key
 ssl_require_and_verify_client_cert: false
+
+# Log rotation settings
+log_max_size: 100M              # Maximum log file size before rotation (100M, 1G, etc.)
+log_rotation_count: 5           # Number of rotated log files to keep (default: 5)
+delete_old_log_files: false     # Delete old log files beyond rotation count (default: false)

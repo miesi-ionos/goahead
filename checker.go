@@ -2,7 +2,7 @@ package main
 
 import (
 	"context"
-	"strconv"
+	"fmt"
 	"strings"
 	"time"
 
@@ -19,7 +19,7 @@ type clusterCheck struct {
 }
 
 func startCheckForRebootedSystemWithOffset(cc clusterCheck, req request, cs clusterSetting) {
-	checkerLogger.Info("Waiting for reboot_completion_check_offset: " + cc.Csetting.RebootCompletionCheckOffset.String() + " for FQDN: " + cc.Fqdn)
+	checkerLogger.Infof("Waiting for reboot_completion_check_offset: %s for FQDN: %s", cc.Csetting.RebootCompletionCheckOffset.String(), cc.Fqdn)
 
 	// Start panic timer if panic threshold is configured
 	if cc.Csetting.RebootCompletionPanicThreshold > 0 {
@@ -58,7 +58,7 @@ func startRebootCompletionPanicTimer(ctx context.Context, cc clusterCheck, req r
 		return
 	}
 
-	clusterLogger.Info("Reboot completion panic timer started for " + cc.Fqdn + " - will trigger at " + panicTime.String())
+	clusterLogger.Infof("Reboot completion panic timer started for %s - will trigger at %s", cc.Fqdn, panicTime.String())
 
 	// Wait until panic time or context cancellation
 	select {
@@ -66,7 +66,7 @@ func startRebootCompletionPanicTimer(ctx context.Context, cc clusterCheck, req r
 		// Panic time reached
 	case <-ctx.Done():
 		// Context cancelled, panic timer cancelled
-		clusterLogger.Info("Reboot completion panic timer cancelled for " + cc.Fqdn + " - server completed reboot successfully")
+		clusterLogger.Infof("Reboot completion panic timer cancelled for %s - server completed reboot successfully", cc.Fqdn)
 		return
 	}
 
@@ -81,13 +81,13 @@ func startRebootCompletionPanicTimer(ctx context.Context, cc clusterCheck, req r
 			// Server is still restarting, trigger panic
 			triggerRebootCompletionPanic(cc, req, cs, clusterLogger)
 		} else {
-			clusterLogger.Info("Reboot completion panic timer cancelled for " + cc.Fqdn + " - server completed reboot successfully")
+			clusterLogger.Infof("Reboot completion panic timer cancelled for %s - server completed reboot successfully", cc.Fqdn)
 		}
 	}
 }
 
 func triggerRebootCompletionPanic(cc clusterCheck, req request, cs clusterSetting, clusterLogger *logrus.Entry) {
-	clusterLogger.Error("Reboot completion panic threshold reached for " + cc.Fqdn + " in cluster " + cc.Cluster + "!")
+	clusterLogger.Errorf("Reboot completion panic threshold reached for %s in cluster %s!", cc.Fqdn, cc.Cluster)
 
 	// Update cluster state with panic timestamp
 	mutex.Lock()
@@ -101,7 +101,7 @@ func triggerRebootCompletionPanic(cc clusterCheck, req request, cs clusterSettin
 
 	currentCs.LastRestartPanicTimestamp = time.Now()
 	if err := writeStructJSONFile(clusterFile, currentCs); err != nil {
-		clusterLogger.Error("Could not save cluster state file after panic: " + clusterFile + " " + err.Error())
+		clusterLogger.Errorf("Could not save cluster state file after panic: %s %v", clusterFile, err)
 	}
 
 	// Trigger panic actions
@@ -109,7 +109,7 @@ func triggerRebootCompletionPanic(cc clusterCheck, req request, cs clusterSettin
 }
 
 func startCheckForRebootedSystem(cc clusterCheck, req request, cs clusterSetting) {
-	checkerLogger.Info("Starting check for rebooted system in cluster " + cc.Cluster + " with fqdn: " + cc.Fqdn)
+	checkerLogger.Infof("Starting check for rebooted system in cluster %s with fqdn: %s", cc.Cluster, cc.Fqdn)
 	successfulChecks := 0
 	for {
 		command := strings.Replace(cc.Csetting.RebootCompletionCheck, "{:%fqdn%:}", cc.Fqdn, -1)
@@ -120,7 +120,7 @@ func startCheckForRebootedSystem(cc clusterCheck, req request, cs clusterSetting
 
 		if er.returnCode == 0 {
 			successfulChecks++
-			checkerLogger.Info("Increasing successful check counter to " + strconv.Itoa(successfulChecks) + " of " + strconv.Itoa(cc.Csetting.RebootCompletionCheckConsecutiveSuccesses) + " for rebooted system in cluster " + cc.Cluster + " with fqdn: " + cc.Fqdn)
+			checkerLogger.Infof("Increasing successful check counter to %d of %d for rebooted system in cluster %s with fqdn: %s", successfulChecks, cc.Csetting.RebootCompletionCheckConsecutiveSuccesses, cc.Cluster, cc.Fqdn)
 			if successfulChecks >= cc.Csetting.RebootCompletionCheckConsecutiveSuccesses {
 				break
 			}
@@ -130,9 +130,9 @@ func startCheckForRebootedSystem(cc clusterCheck, req request, cs clusterSetting
 		//checkerLogger.Info("Sleeping for reboot_completion_check_interval: " + cc.Csetting.RebootCompletionCheckInterval.String())
 		time.Sleep(cc.Csetting.RebootCompletionCheckInterval)
 	}
-	checkerLogger.Info("fqdn: " + cc.Fqdn + " seems to have successfully rebooted in cluster " + cc.Cluster)
+	checkerLogger.Infof("fqdn: %s seems to have successfully rebooted in cluster %s", cc.Fqdn, cc.Cluster)
 	clusterLogger := clusterLoggers[cc.Cluster]
-	clusterLogger.Info("fqdn: " + cc.Fqdn + " seems to have successfully rebooted in cluster " + cc.Cluster)
+	clusterLogger.Infof("fqdn: %s seems to have successfully rebooted in cluster %s", cc.Fqdn, cc.Cluster)
 
 	// Cancel panic timer if it's running
 	if cc.PanicCancel != nil {
@@ -148,6 +148,6 @@ func startCheckForRebootedSystem(cc clusterCheck, req request, cs clusterSetting
 	res.RequestingFqdn = cc.Fqdn
 	res.ReportedUptime = req.Uptime
 	res.FoundCluster = cc.Cluster
-	res.Message = "fqdn: " + cc.Fqdn + " seems to have successfully rebooted in cluster " + cc.Cluster + " at " + res.Timestamp.String()
+	res.Message = fmt.Sprintf("fqdn: %s seems to have successfully rebooted in cluster %s at %s", cc.Fqdn, cc.Cluster, res.Timestamp.String())
 	saveAckFile(res, clusterLogger)
 }

@@ -46,20 +46,20 @@ type clusterState struct {
 
 // readclusterSettingsFile creates the ConfigSettings struct from the config file
 func readClusterSetting(clusterSettingsFile string) {
-	mainLogger.Debug("Trying to read cluster settings config file: " + clusterSettingsFile)
+	mainLogger.Debugf("Trying to read cluster settings config file: %s", clusterSettingsFile)
 	data, err := os.ReadFile(clusterSettingsFile)
 	if err != nil {
-		mainLogger.Fatal("readclusterSettingsFile(): There was an error parsing the config file " + clusterSettingsFile + ": " + err.Error())
+		mainLogger.Fatalf("readclusterSettingsFile(): There was an error parsing the config file %s: %v", clusterSettingsFile, err)
 	}
 
 	var cs map[string]clusterSetting
 	err = yaml.Unmarshal([]byte(data), &cs)
 	if err != nil {
-		mainLogger.Fatal("In file " + clusterSettingsFile + ": YAML unmarshal error: " + err.Error())
+		mainLogger.Fatalf("In file %s: YAML unmarshal error: %v", clusterSettingsFile, err)
 	}
 
 	for clusterName, clusterSetting := range cs {
-		mainLogger.Debug("Adding cluster settings " + clusterName)
+		mainLogger.Debugf("Adding cluster settings %s", clusterName)
 		clusterSettings[clusterName] = clusterSetting
 		clusterLogger := initLogger(clusterName)
 		clusterLoggers[clusterName] = clusterLogger
@@ -82,7 +82,7 @@ func triggerRebootGoaheadActions(fqdn string, cluster string, uptime string, clu
 // triggerRebootCompletionActions executes optional scripts that should run, when a host is flagged as sucsessfully rebooted
 func triggerRebootCompletionActions(fqdn string, cluster string, uptime string, clusterLogger *logrus.Entry) {
 	for _, action := range clusterSettings[cluster].RebootCompletionActions {
-		clusterLogger.Info("found reboot completion action:" + action)
+		clusterLogger.Infof("found reboot completion action: %s", action)
 		command := strings.Replace(action, "{:%fqdn%:}", fqdn, -1)
 		command = strings.Replace(command, "{:%cluster%:}", cluster, -1)
 		command = strings.Replace(command, "{:%uptime%:}", uptime, -1)
@@ -95,7 +95,7 @@ func triggerRebootCompletionActions(fqdn string, cluster string, uptime string, 
 // triggerRebootCompletionPanicActions executes optional scripts that should run when a host of a list will not back after reboot
 func triggerRebootCompletionPanicActions(fqdn string, cluster string, uptime string, clusterLogger *logrus.Entry) {
 	for _, action := range clusterSettings[cluster].RebootCompletionPanicActions.Scripts {
-		clusterLogger.Info("found reboot completion panic action:" + action)
+		clusterLogger.Infof("found reboot completion panic action: %s", action)
 		command := strings.Replace(action, "{:%fqdn%:}", fqdn, -1)
 		command = strings.Replace(command, "{:%cluster%:}", cluster, -1)
 		command = strings.Replace(command, "{:%uptime%:}", uptime, -1)

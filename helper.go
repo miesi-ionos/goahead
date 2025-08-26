@@ -9,7 +9,9 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"syscall"
@@ -33,9 +35,9 @@ func Debugf(s string) {
 		callingFunctionName := strings.Split(runtime.FuncForPC(pc).Name(), ".")[len(strings.Split(runtime.FuncForPC(pc).Name(), "."))-1]
 		if strings.HasPrefix(callingFunctionName, "func") {
 			// check for anonymous function names
-			log.Print("DEBUG " + fmt.Sprint(s))
+			log.Printf("DEBUG %v", s)
 		} else {
-			log.Print("DEBUG " + callingFunctionName + "(): " + fmt.Sprint(s))
+			log.Printf("DEBUG %s(): %v", callingFunctionName, s)
 		}
 	}
 }
@@ -43,7 +45,7 @@ func Debugf(s string) {
 // Verbosef is a helper function for verbose logging if global variable verbose is set to true
 func Verbosef(s string) {
 	if debug != false || verbose != false {
-		log.Print(fmt.Sprint(s))
+		log.Printf("%v", s)
 	}
 }
 
@@ -59,7 +61,7 @@ func Warnf(s string) {
 	pc, _, _, _ := runtime.Caller(1)
 	callingFunctionName := strings.Split(runtime.FuncForPC(pc).Name(), ".")[len(strings.Split(runtime.FuncForPC(pc).Name(), "."))-1]
 	color.Set(color.FgYellow)
-	log.Print("WARN " + callingFunctionName + "(): " + fmt.Sprint(s))
+	log.Printf("WARN %s(): %v", callingFunctionName, s)
 	color.Unset()
 }
 
@@ -275,15 +277,153 @@ func keysString(m map[string]struct{}) []string {
 	return keys
 }
 
-func initLogger(fileName string) *log.Entry {
-	log.Debug("setting up log file:" + filepath.Join(config.LogBaseDir, fileName+".log"))
-	var logrusLog = log.New()
-	file, err := os.OpenFile(filepath.Join(config.LogBaseDir, fileName+".log"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
-	if err == nil {
-		logrusLog.Out = file
-	} else {
-		log.Fatal("Failed to log to file " + filepath.Join(config.LogBaseDir, fileName+".log") + " Error: " + err.Error())
+// LogFileManager manages log files and their lifecycle
+type LogFileManager struct {
+	files map[string]*os.File
+}
+
+var logFileManager = &LogFileManager{
+	files: make(map[string]*os.File),
+}
+
+// CloseLogFiles closes all open log files - call during shutdown
+func (lfm *LogFileManager) CloseLogFiles() {
+	for name, file := range lfm.files {
+		if err := file.Close(); err != nil {
+			log.Errorf("Error closing log file %s: %v", name, err)
+		}
 	}
+	lfm.files = make(map[string]*os.File)
+}
+
+// parseLogSize converts size strings like "100M", "1G" to bytes
+func parseLogSize(sizeStr string) (int64, error) {
+	re := regexp.MustCompile(`^(\d+)([KMGT]?)[Bb]?$`)
+	matches := re.FindStringSubmatch(strings.ToUpper(sizeStr))
+	if len(matches) != 3 {
+		return 0, fmt.Errorf("invalid size format: %s (expected format: 100M, 1G, etc.)", sizeStr)
+	}
+
+	size, err := strconv.ParseInt(matches[1], 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("invalid size number: %s", matches[1])
+	}
+
+	unit := matches[2]
+	switch unit {
+	case "K":
+		return size * 1024, nil
+	case "M":
+		return size * 1024 * 1024, nil
+	case "G":
+		return size * 1024 * 1024 * 1024, nil
+	case "T":
+		return size * 1024 * 1024 * 1024 * 1024, nil
+	case "":
+		return size, nil // bytes
+	default:
+		return 0, fmt.Errorf("unknown size unit: %s", unit)
+	}
+}
+
+// rotateLogFile performs log rotation with timestamp-based naming and retention management
+func rotateLogFile(logFilePath string) error {
+	maxSizeBytes, err := parseLogSize(config.LogMaxSize)
+	if err != nil {
+		log.Errorf("Invalid log_max_size configuration: %v", err)
+		return err
+	}
+
+	// Check if rotation is needed
+	stat, err := os.Stat(logFilePath)
+	if err != nil {
+		return nil // File doesn't exist, no rotation needed
+	}
+
+	if stat.Size() < maxSizeBytes {
+		return nil // File not large enough for rotation
+	}
+
+	// Create timestamp for rotated file
+	timestamp := time.Now().Format("2006-01-02_15-04-05")
+	rotatedPath := fmt.Sprintf("%s.%s", logFilePath, timestamp)
+
+	// Rotate the current log file
+	if err := os.Rename(logFilePath, rotatedPath); err != nil {
+		return fmt.Errorf("failed to rotate log file %s: %v", logFilePath, err)
+	}
+
+	log.Infof("Rotated log file %s to %s", logFilePath, rotatedPath)
+
+	// Clean up old log files if enabled
+	if config.DeleteOldLogFiles {
+		if err := cleanupOldLogFiles(logFilePath); err != nil {
+			log.Warnf("Failed to cleanup old log files: %v", err)
+		}
+	}
+
+	return nil
+}
+
+// cleanupOldLogFiles removes rotated log files beyond the configured retention count
+func cleanupOldLogFiles(baseLogPath string) error {
+	logDir := filepath.Dir(baseLogPath)
+	logBaseName := filepath.Base(baseLogPath)
+	
+	// Find all rotated log files for this base log
+	pattern := fmt.Sprintf("%s.*", logBaseName)
+	files, err := filepath.Glob(filepath.Join(logDir, pattern))
+	if err != nil {
+		return fmt.Errorf("failed to glob log files: %v", err)
+	}
+
+	// Filter out the current log file and extract only rotated files with timestamps
+	var rotatedFiles []string
+	timestampPattern := regexp.MustCompile(`\.\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}$`)
+	
+	for _, file := range files {
+		if file != baseLogPath && timestampPattern.MatchString(file) {
+			rotatedFiles = append(rotatedFiles, file)
+		}
+	}
+
+	// Sort by filename (which includes timestamp) - newest first
+	sort.Sort(sort.Reverse(sort.StringSlice(rotatedFiles)))
+
+	// Keep only the configured number of rotated files
+	if len(rotatedFiles) > config.LogRotationCount {
+		filesToDelete := rotatedFiles[config.LogRotationCount:]
+		for _, file := range filesToDelete {
+			if err := os.Remove(file); err != nil {
+				log.Warnf("Failed to delete old log file %s: %v", file, err)
+			} else {
+				log.Infof("Deleted old log file: %s", file)
+			}
+		}
+	}
+
+	return nil
+}
+
+func initLogger(fileName string) *log.Entry {
+	logFilePath := filepath.Join(config.LogBaseDir, fileName+".log")
+	log.Debugf("Setting up log file: %s", logFilePath)
+	
+	// Perform log rotation if needed based on configured parameters
+	if err := rotateLogFile(logFilePath); err != nil {
+		log.Errorf("Log rotation failed: %v", err)
+	}
+	
+	var logrusLog = log.New()
+	file, err := os.OpenFile(logFilePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+	if err != nil {
+		log.Fatalf("Failed to log to file %s: %v", logFilePath, err)
+	}
+	
+	// Store file handle for proper cleanup later
+	logFileManager.files[fileName] = file
+	logrusLog.Out = file
+	
 	if debug {
 		logrusLog.SetLevel(log.DebugLevel)
 	}
