@@ -5,7 +5,7 @@ Comprehensive test suite for the goahead server and client implementation, speci
 ## Overview
 
 This test suite validates:
-- ✅ **Simple clusters** (no offset, no panic threshold)  
+- ✅ **Simple clusters** (no offset, no panic threshold)
 - ✅ **Offset-only clusters** (reboot_completion_check_offset)
 - ✅ **Panic-only clusters** (reboot_completion_panic_threshold)
 - ✅ **Full feature clusters** (both offset + panic threshold)
@@ -24,7 +24,7 @@ This test suite validates:
 │   └── clients/                # Generated client configs
 ├── scripts/          # Action scripts called by goahead
 │   ├── reboot_goahead_action.sh       # Called when reboot approved
-│   ├── reboot_completion_check.sh     # Checks if server is back online  
+│   ├── reboot_completion_check.sh     # Checks if server is back online
 │   ├── reboot_completion_action.sh    # Called when reboot completed
 │   ├── reboot_completion_panic_action.sh # Called on panic threshold
 │   └── client_restart_condition.sh   # Client restart condition check
@@ -43,13 +43,13 @@ This test suite validates:
 - **Expected**: Immediate reboot completion checking
 - **Validates**: Basic goahead + completion actions called
 
-### Test 2: Offset Cluster  
+### Test 2: Offset Cluster
 - **Config**: 5s offset, no panic threshold
 - **Expected**: 5s delay before first reboot completion check
 - **Validates**: Completion actions delayed by offset period
 
 ### Test 3: Panic Cluster
-- **Config**: No offset, 10s panic threshold  
+- **Config**: No offset, 10s panic threshold
 - **Expected**: Panic triggered after 10s if server doesn't come back
 - **Validates**: Automatic panic timer triggers
 
@@ -58,16 +58,25 @@ This test suite validates:
 - **Expected**: Panic triggered after 20s total (5s offset + 15s threshold)
 - **Validates**: Combined offset + panic threshold timing
 
-### Test 5: Full Cluster (Success Test)  
+### Test 5: Full Cluster (Success Test)
 - **Config**: 5s offset + 15s panic threshold
 - **Expected**: Successful reboot cancels panic timer
 - **Validates**: Panic timer cancellation on successful completion
+
+### Test 6: Positive Execution Test
+- **Config**: Simple cluster with actual client execution
+- **Expected**: Full workflow with real goahead_client communication
+- **Validates**:
+  - Client receives `go_ahead:true` response
+  - `reboot_goahead_actions` scripts are executed when reboot is approved
+  - `reboot_completion_actions` scripts are executed after successful reboot
+  - Real client-server communication works end-to-end
 
 ## Usage
 
 ### Quick Start
 
-1. **Prerequisites**: 
+1. **Prerequisites**:
    - Ensure the `goahead_client` directory is in the same parent directory as `goahead`
    - Directory structure should be:
      ```
@@ -92,7 +101,7 @@ This test suite validates:
 
 ```
 ======================================
-  GoAhead Reboot Offset & Panic Test Suite  
+  GoAhead Reboot Offset & Panic Test Suite
 ======================================
 
 [INFO] Setting up test environment...
@@ -101,7 +110,7 @@ This test suite validates:
 
 [INFO] Running Test 1: Simple cluster (no offset, no panic threshold)
 [SUCCESS] PASS: Simple cluster - Goahead action called
-[SUCCESS] PASS: Simple cluster - Completion action called  
+[SUCCESS] PASS: Simple cluster - Completion action called
 [SUCCESS] PASS: Simple cluster - Panic action not called
 
 [INFO] Running Test 2: Offset cluster (5s offset, no panic threshold)
@@ -109,13 +118,19 @@ This test suite validates:
 [SUCCESS] PASS: Offset cluster - Completion action delayed by offset
 [SUCCESS] PASS: Offset cluster - Completion action called after offset
 
-... (additional tests) ...
+[INFO] Running Test 6: Positive execution test with actual client
+[SUCCESS] PASS: Positive test - Client received go_ahead:true
+[SUCCESS] PASS: Positive test - Goahead action executed
+[SUCCESS] PASS: Positive test - Completion action executed
+[INFO] Action execution logs:
+  Goahead actions: 1 entries
+  Completion actions: 1 entries
 
 ==========================
    TEST SUITE SUMMARY
 ==========================
-Tests Run:    15
-Tests Passed: 15  
+Tests Run:    18
+Tests Passed: 18
 Tests Failed: 0
 
 [SUCCESS] ALL TESTS PASSED!
@@ -128,13 +143,13 @@ Tests Failed: 0
 The test suite uses marker files to track when action scripts are called:
 
 - **Reboot approved**: `{cluster}-{fqdn}-goahead-granted`
-- **Reboot completed**: `{cluster}-{fqdn}-reboot-completed` 
+- **Reboot completed**: `{cluster}-{fqdn}-reboot-completed`
 - **Panic triggered**: `{cluster}-{fqdn}-panic-triggered`
 
 ### Server State Simulation
 
 - **Server needs restart**: `client-{id}-needs-restart` file created
-- **Server back online**: `{fqdn}-server-online` file created  
+- **Server back online**: `{fqdn}-server-online` file created
 - Test runner controls these states to simulate different scenarios
 
 ### Timing Validation
@@ -152,14 +167,14 @@ Tests use carefully timed delays to validate:
 | Cluster | Offset | Panic Threshold | Total Panic Time |
 |---------|--------|----------------|------------------|
 | simple-cluster | 0s | 0s (disabled) | N/A |
-| offset-cluster | 5s | 0s (disabled) | N/A |  
+| offset-cluster | 5s | 0s (disabled) | N/A |
 | panic-cluster | 0s | 10s | 10s |
 | full-cluster | 5s | 15s | 20s |
 
 ### FQDN Patterns
 
 - `simple-*.test.tld` → simple-cluster
-- `offset-*.test.tld` → offset-cluster  
+- `offset-*.test.tld` → offset-cluster
 - `panic-*.test.tld` → panic-cluster
 - `full-*.test.tld` → full-cluster
 
@@ -193,7 +208,7 @@ Tests use carefully timed delays to validate:
 ### Debug Mode
 
 Check logs for detailed information:
-- **Server logs**: `logs/server.log`  
+- **Server logs**: `logs/server.log`
 - **Action logs**: `results/*.log`
 
 ## Extending the Test Suite
@@ -206,7 +221,7 @@ Check logs for detailed information:
 
 ### Adding New Action Scripts
 
-1. Create script in `scripts/`  
+1. Create script in `scripts/`
 2. Make executable: `chmod +x scripts/new_script.sh`
 3. Reference in cluster config files
 4. Add validation logic to test functions
@@ -214,7 +229,7 @@ Check logs for detailed information:
 ## Dependencies
 
 - **Go 1.24+** (for compilation)
-- **OpenSSL** (for certificate generation)  
+- **OpenSSL** (for certificate generation)
 - **Bash 4+** (for test runner)
 - **Standard Unix tools** (timeout, pkill, etc.)
 
@@ -230,7 +245,7 @@ Example CI integration:
 cd goahead/tests
 if ./test_suite.sh; then
     echo "✅ All goahead tests passed"
-else  
+else
     echo "❌ goahead tests failed"
     exit 1
 fi

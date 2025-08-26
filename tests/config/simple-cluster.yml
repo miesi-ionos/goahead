@@ -4,11 +4,11 @@ simple-cluster:
   cluster_type: simple
   allowed_parallel_restarts: 1
   reboot_goahead_actions:
-    - /home/mieslingert/work/goahead/tests/scripts/reboot_goahead_action.sh {:%fqdn%:} {:%cluster%:}
-  reboot_completion_check: /home/mieslingert/work/goahead/tests/scripts/reboot_completion_check.sh {:%fqdn%:}
+    - ../scripts/reboot_goahead_action.sh {:%fqdn%:} {:%cluster%:}
+  reboot_completion_check: ../scripts/reboot_completion_check.sh {:%fqdn%:}
   reboot_completion_check_interval: 2s
   reboot_completion_check_consecutive_successes: 2
   reboot_completion_actions:
-    - /home/mieslingert/work/goahead/tests/scripts/reboot_completion_action.sh {:%fqdn%:} {:%cluster%:}
+    - ../scripts/reboot_completion_action.sh {:%fqdn%:} {:%cluster%:}
   minimum_uptime: 10s
   raise_errors: false
