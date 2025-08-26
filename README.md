@@ -106,6 +106,6 @@ foobar-cluster:
   reboot_completion_panic_threshold: 3h   # Panic if not rebooted after 3h 15m total
   reboot_completion_panic_actions:
     scripts:
-      - /etc/goahead/panic_scripts/alert_admins.sh {:%fqdn%:} {:%cluster%:}
-      - /etc/goahead/panic_scripts/create_incident.sh {:%fqdn%:}
+      - /path/to/scripts/alert_admins.sh {:%fqdn%:} {:%cluster%:}
+      - /path/to/scripts/create_incident.sh {:%fqdn%:}
 ```

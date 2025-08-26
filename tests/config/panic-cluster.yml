@@ -1,0 +1,18 @@
+panic-cluster:
+  enabled: true
+  name_pattern: panic-.*\.test\.tld
+  cluster_type: panic-test
+  allowed_parallel_restarts: 1
+  reboot_goahead_actions:
+    - ../scripts/reboot_goahead_action.sh {:%fqdn%:} {:%cluster%:}
+  reboot_completion_check: ../scripts/reboot_completion_check.sh {:%fqdn%:}
+  reboot_completion_check_interval: 2s
+  reboot_completion_check_consecutive_successes: 2
+  reboot_completion_actions:
+    - ../scripts/reboot_completion_action.sh {:%fqdn%:} {:%cluster%:}
+  reboot_completion_panic_threshold: 10s
+  reboot_completion_panic_actions:
+    scripts:
+      - ../scripts/reboot_completion_panic_action.sh {:%fqdn%:} {:%cluster%:}
+  minimum_uptime: 10s
+  raise_errors: false

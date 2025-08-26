@@ -1,0 +1,11 @@
+---
+listen_address: 127.0.0.1
+listen_port: 8444
+log_base_dir: /home/mieslingert/work/goahead/tests/logs/
+save_state_dir: /home/mieslingert/work/goahead/tests/logs/
+include_dir: /home/mieslingert/work/goahead/tests/config/
+timeout: 20s
+ssl_client_cert_ca_file: /home/mieslingert/work/goahead/tests/ssl/test.pem
+ssl_certificate_file: /home/mieslingert/work/goahead/tests/ssl/test.pem
+ssl_private_key: /home/mieslingert/work/goahead/tests/ssl/test.key
+ssl_require_and_verify_client_cert: false

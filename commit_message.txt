@@ -1,0 +1,10 @@
+create testsuite
+
+* Update test suite scripts to use relative paths instead of /home/mieslingert
+* Auto-detect goahead_client directory location in test and validation scripts
+* Convert test configuration files to use relative paths (../scripts/...)
+* Update README.md examples to use generic /path/to/scripts instead of absolute paths
+* Maintain full functionality while making test suite portable for all users
+
+Test suite now works on any system with proper goahead/goahead_client directory structure.
+
