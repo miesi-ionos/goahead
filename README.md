@@ -65,4 +65,47 @@ E.g. Clean removal from load-balancing/cluster or notify monitoring of upcoming 
 #### `goahead` service checks for successful restart
 
 The configured `reboot_completion_check` gets triggered, when the first contact from the previous client gets recieved.
-When the check returns with the expected return code for the configured `reboot_completion_check_consecutive_successes` times, then the client is considered as successfully rebooted and the amount of currently restarting cluster nodes is decremented. 
+When the check returns with the expected return code for the configured `reboot_completion_check_consecutive_successes` times, then the client is considered as successfully rebooted and the amount of currently restarting cluster nodes is decremented.
+
+## Configuration Reference
+
+### Reboot Completion Check Parameters
+
+#### `reboot_completion_check_offset`
+**Type:** Duration (e.g., `15m`, `2h`, `30s`)
+**Default:** `0s` (no delay)
+
+Defines the initial delay before starting reboot completion checks. This parameter allows systems time to fully shut down and begin the reboot process before goahead starts checking if the reboot is complete.
+
+**Timeline:** The first reboot completion check will start at `reboot_approval_time + reboot_completion_check_offset`.
+
+**Use cases:**
+- Allow time for graceful shutdown processes
+- Account for hardware initialization time
+- Prevent false negatives from checking too early
+
+#### `reboot_completion_panic_threshold`
+**Type:** Duration (e.g., `3h`, `90m`, `7200s`)
+**Default:** `0s` (disabled)
+
+Sets the maximum time to wait for a server to complete its reboot before triggering panic actions. The panic timer is calculated as an absolute deadline: `reboot_approval_time + reboot_completion_check_offset + reboot_completion_panic_threshold`.
+
+**Automatic Triggering:** Unlike other checks that are triggered by incoming requests, the panic threshold automatically triggers at the calculated time if the server hasn't completed its reboot.
+
+**Timeline:**
+1. `T+0`: Reboot approved
+2. `T+offset`: First reboot completion check starts
+3. `T+offset+panic_threshold`: Panic actions trigger automatically if server still rebooting
+
+**Panic Actions:** When triggered, executes the configured `reboot_completion_panic_actions` scripts and sends notifications as defined.
+
+**Example Configuration:**
+```yaml
+foobar-cluster:
+  reboot_completion_check_offset: 15m      # Wait 15 minutes before first check
+  reboot_completion_panic_threshold: 3h   # Panic if not rebooted after 3h 15m total
+  reboot_completion_panic_actions:
+    scripts:
+      - /etc/goahead/panic_scripts/alert_admins.sh {:%fqdn%:} {:%cluster%:}
+      - /etc/goahead/panic_scripts/create_incident.sh {:%fqdn%:}
+```

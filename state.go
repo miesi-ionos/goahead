@@ -10,10 +10,9 @@ import (
 )
 
 type rebootCheckResult struct {
-	RebootPanicThresholdEnabled bool
-	FqdnGoAhead                 bool
-	ClusterGoAhead              bool
-	Reason                      string
+	FqdnGoAhead    bool
+	ClusterGoAhead bool
+	Reason         string
 }
 
 type inquireCheckResult struct {
@@ -42,7 +41,7 @@ func checkAckFileInquire(req request, res response, clusterLogger *logrus.Entry,
 			mutex.Lock()
 			if cc, ok := sleepingClusterChecks[res.RequestingFqdn]; ok {
 				// Interrupt a reboot completion check if there is one still sleeping
-				clusterLogger.Info("Interrupting sleeping reboot completion check for " + req.Fqdn + " inside cluster " + res.FoundCluster)
+				clusterLogger.Info("Interrupting reboot_completion_check_offset sleep for " + req.Fqdn + " inside cluster " + res.FoundCluster + " - server has rebooted!")
 				delete(sleepingClusterChecks, cc.Fqdn)
 				go startCheckForRebootedSystem(cc, req, cs)
 			}
@@ -119,23 +118,6 @@ func checkClusterState(res response, result rebootCheckResult, clusterLogger *lo
 			result.Reason = "You should already be restarting!"
 			result.ClusterGoAhead = true
 			return result
-		} else if len(cs.CurrentRestartingServers) > 0 &&
-			// we do not want to run script on every request, we will wait for next threshold (act like interval)
-			time.Since(cs.LastRestartPanicTimestamp).Seconds() > clusterSettings[res.FoundCluster].RebootCompletionPanicThreshold.Seconds() &&
-			// we have meet threshold
-			time.Since(cs.LastRestartRequestTimestamp).Seconds() > clusterSettings[res.FoundCluster].RebootCompletionPanicThreshold.Seconds() {
-			result.Reason = "Reboot completion panic threshold met for cluster " + res.FoundCluster + " because previous host " + strings.Join(keysString(cs.CurrentRestartingServers), ",") + " still offline!"
-			result.ClusterGoAhead = false
-			result.RebootPanicThresholdEnabled = true
-			cs.LastRestartPanicTimestamp = time.Now()
-			clusterLogger.Debug("Trying to save cluster ACK file on restart panic " + clusterFile)
-			if err := writeStructJSONFile(clusterFile, cs); err != nil {
-				result.Reason = "Could not save cluster state file: " + clusterFile + " " + err.Error()
-				clusterLogger.Error("Could not save cluster state file: " + clusterFile + " " + err.Error())
-			} else {
-				clusterLogger.Debug("Saved cluster state file: " + clusterFile)
-			}
-			return result
 		} else if cs.CurrentOngoingRestarts >= clusterSettings[res.FoundCluster].AllowedParallelRestarts {
 			result.Reason = "Denied restart request as the current_ongoing_restarts of cluster " + res.FoundCluster + " is larger than the allowed_parallel_restarts: " + strconv.Itoa(cs.CurrentOngoingRestarts) + " >= " + strconv.Itoa(clusterSettings[res.FoundCluster].AllowedParallelRestarts) + " Currently restarting hosts: " + strings.Join(keysString(cs.CurrentRestartingServers), ",")
 			result.ClusterGoAhead = false
@@ -211,12 +193,13 @@ func checkCurrentClusterStates() {
 					clusterLogger.Info("Trying to restart cluster node checks for clusterFile: " + clusterFile)
 					// restart the successfull reboot checker, otherwise it would block _all_ later restart requests
 					for restartingClusterNode := range cs.CurrentRestartingServers {
-						cc := clusterCheck{clusterSettings[cluster], restartingClusterNode, "checkCurrentClusterStates()", cluster}
+						cc := clusterCheck{clusterSettings[cluster], restartingClusterNode, "checkCurrentClusterStates()", cluster, time.Now(), nil}
 						mutex.Lock()
 						sleepingClusterChecks[restartingClusterNode] = cc
 						mutex.Unlock()
-						checkerLogger.Info("Sleeping for reboot_completion_check_offset: " + cc.Csetting.RebootCompletionCheckOffset.String() + " for FQDN: " + cc.Fqdn)
 						clusterLogger.Info("Restarting cluster checker for " + restartingClusterNode + " inside cluster " + cluster + " check command: " + csetting.RebootCompletionCheck)
+						// Start the reboot checker with offset in a goroutine
+						go startCheckForRebootedSystemWithOffset(cc, request{Fqdn: restartingClusterNode, Uptime: "unknown"}, csetting)
 					}
 				}
 			}

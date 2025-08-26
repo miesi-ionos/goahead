@@ -178,18 +178,17 @@ func restartHandlerV1(w http.ResponseWriter, r *http.Request) {
 			if result.FqdnGoAhead {
 				result = checkClusterState(res, result, clusterLogger)
 			}
-			if result.RebootPanicThresholdEnabled {
-				res.Message = result.Reason
-				triggerRebootCompletionPanicActions(request.Fqdn, res.FoundCluster, request.Uptime, clusterLogger)
-				clusterLogger.Info("Reboot panic happened for cluster " + res.FoundCluster)
-			} else if result.FqdnGoAhead && result.ClusterGoAhead {
+			if result.FqdnGoAhead && result.ClusterGoAhead {
 				res.Message = result.Reason
 				res.Goahead = true
 				triggerRebootGoaheadActions(request.Fqdn, res.FoundCluster, request.Uptime, clusterLogger)
 				clusterLogger.Info("Activating cluster checker for " + request.Fqdn + " inside cluster " + res.FoundCluster)
 				mutex.Lock()
 				if _, ok := sleepingClusterChecks[res.RequestingFqdn]; !ok {
-					sleepingClusterChecks[request.Fqdn] = clusterCheck{clusterSettings[c], request.Fqdn, rid, res.FoundCluster}
+					cc := clusterCheck{clusterSettings[c], request.Fqdn, rid, res.FoundCluster, time.Now(), nil}
+					sleepingClusterChecks[request.Fqdn] = cc
+					// Start the reboot checker with offset in a goroutine
+					go startCheckForRebootedSystemWithOffset(cc, request, clusterSettings[c])
 				}
 				mutex.Unlock()
 			} else {
